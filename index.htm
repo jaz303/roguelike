@@ -5,6 +5,7 @@
     <title>Jason's Roguelike</title>
     <link rel='stylesheet' href='../../assets/reset.css'></link>
     <link rel='stylesheet' href='../../assets/main.css'></link>
+    <link rel='stylesheet' href='styles.css'></link>
     <script src='bundle.js'></script>
     <meta name='project' content='Roguelike'>
     <meta name='description' content='A wild grid appears...'>
@@ -15,10 +16,37 @@
     </div>
     <div class='main'>
       <div class='game roguelike'>
-        <canvas id='canvas' width='800' height='600'></canvas>
+        <canvas id='canvas' width='400' height='240' tabindex='0'></canvas>
+        <div>(live demo - cursor keys to move)</div>
       </div>
       <div class='narrative'>
-        <h1>Update 1: A wild grid appears</h1>
+
+  <h1>Episode 1: a wild grid appears</h1>
+
+  <p>
+    I'm making a game! The goal: a realtime-ish roguelike. Things I'd like to include:
+  </p>
+
+  <ul>
+    <li>Lighting (directional/coloured)</li>
+    <li>RPG elements: inventory, conversations</li>
+    <li>Party system</li>
+    <li>Magic system</li>
+    <li>Various AI techniques: pathfinding, behaviour trees, knowledge sharing</li>
+    <li>Procedural generation</li>
+  </ul>
+
+  <p>
+    Tonight I've started off with a random "tilemap" generator, basic keyboard
+    movement and  a renderer. Not much to write home about here; most of the
+    time was actually spent writing a some Ruby to auto generate the website from
+    specified git commits.
+  </p>
+
+  <p>
+    Next up: basic map generation, wall collision detection.
+  </p>
+
       </div>
     </div>
   </body>

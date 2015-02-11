@@ -1,0 +1,7 @@
+#canvas {
+	border: 1px solid #505050;
+}
+
+#canvas:focus {
+	outline: 1px solid #a0a0a0;
+}
