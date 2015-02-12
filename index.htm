@@ -21,31 +21,95 @@
       </div>
       <div class='narrative'>
 
-  <h1>Episode 1: a wild grid appears</h1>
+  <h1>Episode 2: rooms &amp; wall collisions</h1>
 
   <p>
-    I'm making a game! The goal: a realtime-ish roguelike. Things I'd like to include:
+    Tonight I've added a regular, connected grid of rooms to the world. This was pretty straightforward to generate:
   </p>
 
-  <ul>
-    <li>Lighting (directional/coloured)</li>
-    <li>RPG elements: inventory, conversations</li>
-    <li>Party system</li>
-    <li>Magic system</li>
-    <li>Various AI techniques: pathfinding, behaviour trees, knowledge sharing</li>
-    <li>Procedural generation</li>
-  </ul>
+<pre><code>// Top left corner for placing rooms
+var placeX = 1;
+var placeY = 1;
+
+// Size of rooms
+var roomWidth = 9;
+var roomHeight = 7;
+
+// Should we place doors leading left/up when we place the next room?
+var doorLeft = false;
+var doorUp = false;
+
+// Go room-by-room in Y-axis until a room can't fit
+while (placeY + roomHeight &lt; mapHeight) {
+  placeX = 1; // Reset left side of room for this row
+  doorLeft = false; // No left door for first room in row
+  // Go room-by-room in X-axis until a room can't fit
+  while (placeX + roomWidth &lt; mapWidth) {
+    // Place "doors" by deleting tiles
+    if (doorLeft) {
+      map[placeY+floor(roomHeight/2)][placeX-1] = 0;
+    }
+    if (doorUp) {
+      map[placeY-1][placeX+floor(roomWidth/2)] = 0;
+    }
+    // Fill in the "room" with empty space
+    for (var row = placeY; row &lt; placeY + roomHeight; ++row) {
+      for (var col = placeX; col &lt; placeX + roomWidth; ++col) {
+        map[row][col] = 0;
+      }
+    }
+    doorLeft = true; // Next room in row has a door to the left
+    // Move the placer over to the next room, leaving one extra cell
+    // for a passageway
+    placeX += roomWidth + 1;
+  }
+  doorUp = true; // End of row; every successive row should have door leading up
+  placeY += roomHeight + 1; // advance placer down in Y axis
+}</code></pre>
 
   <p>
-    Tonight I've started off with a random "tilemap" generator, basic keyboard
-    movement and  a renderer. Not much to write home about here; most of the
-    time was actually spent writing a some Ruby to auto generate the website from
-    specified git commits.
+    To implement wall collision I first introduced a helper function to check if a particular tile was blocked:
+  </p>
+
+<pre><code>function isTileBlocked(map, x, y) {
+  return map.tiles[y][x] !== 0;
+}</code></pre>
+
+  <p>
+    And then added a <code>tryMove()</code> function that takes a position object and a delta and only commits the move if the target tile is not blocked:
+  </p>
+
+<pre><code>function tryMove(map, currentPosition, dx, dy) {
+  var newX = currentPosition.x + dx;
+  var newY = currentPosition.y + dy;
+  if (newX &lt; 0 || newX &gt;= map.width || newY &lt; 0 || newY &gt;= map.height) {
+    return false;
+  } else if (!isTileBlocked(map, newX, newY)) {
+    currentPosition.x = newX;
+    currentPosition.y = newY;
+    return true;
+  } else {
+    return false;
+  }
+}</code></pre>
+
+  <p>
+    This is deficient in cases where the absolute value of either <code>dx</code> or <code>dy</code> is greater than 1 (it would allow movement through walls) but it'll do for now.
   </p>
 
   <p>
-    Next up: basic map generation, wall collision detection.
+    The last step was to update the movement handler to use <code>tryMove()</code>:
   </p>
+
+<pre><code>if (keyState.left.isDown)   tryMove(map, playerPos, -1, 0);
+if (keyState.right.isDown)  tryMove(map, playerPos, 1, 0);
+if (keyState.up.isDown)     tryMove(map, playerPos, 0, -1);
+if (keyState.down.isDown)   tryMove(map, playerPos, 0, 1);</code></pre>
+
+  <p>
+    A good second night of hacking! In the next session I'll start adding some basic stats to the player (health, magic etc.) and maybe add some objects to the game world that can be collected/dropped.
+  </p>
+
 
       </div>
     </div>

@@ -1,4 +1,6 @@
 (function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);var f=new Error("Cannot find module '"+o+"'");throw f.code="MODULE_NOT_FOUND",f}var l=n[o]={exports:{}};t[o][0].call(l.exports,function(e){var n=t[o][1][e];return s(n?n:e)},l,l.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({"/Users/jason/dev/my-sites/jf/gamedev/projects/roguelike/init.js":[function(require,module,exports){
+var floor = Math.floor;
+
 window.init = function(canvas) {
 
 	var canvasWidth			= canvas.width;
@@ -10,11 +12,35 @@ window.init = function(canvas) {
 	var screenTilesWide 	= canvasWidth / tileWidth;
 	var screenTilesHigh		= canvasHeight / tileHeight;
 
-	var mapWidth 			= 100;
-	var mapHeight 			= 100;
+	var map = {
+		width 	: 100,
+		height 	: 100,
+		tiles 	: []
+	};
 
-	var playerPos 			= { x: 0, y: 0 };
+	var playerPos 			= { x: 5, y: 4 };
 
+	//
+	// Functions
+
+	function tryMove(map, currentPosition, dx, dy) {
+		var newX = currentPosition.x + dx;
+		var newY = currentPosition.y + dy;
+		if (newX < 0 || newX >= map.width || newY < 0 || newY >= map.height) {
+			return false;
+		} else if (!isTileBlocked(map, newX, newY)) {
+			currentPosition.x = newX;
+			currentPosition.y = newY;
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	function isTileBlocked(map, x, y) {
+		return map.tiles[y][x] !== 0;
+	}
+	
 	//
 	// Keyboard handling
 
@@ -51,6 +77,7 @@ window.init = function(canvas) {
 				state.halfTxCount++;
 			}
 		}
+		evt.preventDefault();
 	});
 
 	canvas.addEventListener('keyup', function(evt) {
@@ -60,19 +87,55 @@ window.init = function(canvas) {
 			state.isDown = false;
 			state.halfTxCount++;
 		}
+		evt.preventDefault();
 	});
 
 	//
-	//
-	
-	var map = [];
-	for (var i = 0; i < mapHeight; ++i) {
+	// Create empty map
+
+	for (var i = 0; i < map.height; ++i) {
 		var mapRow = [];
-		for (var j = 0; j < mapWidth; ++j) {
-			mapRow.push(Math.random() > 0.5 ? 1 : 0);
+		for (var j = 0; j < map.width; ++j) {
+			mapRow.push(1);
 		}
-		map.push(mapRow);
+		map.tiles.push(mapRow);
 	}
+
+	//
+	// Generate map
+	// Let's just start with a grid of rooms
+
+	var placeX = 1;
+	var placeY = 1;
+	var roomWidth = 9;
+	var roomHeight = 7;
+	var doorLeft = false;
+	var doorUp = false;
+
+	while (placeY + roomHeight < map.height) {
+		placeX = 1;
+		doorLeft = false;
+		while (placeX + roomWidth < map.width) {
+			if (doorLeft) {
+				map.tiles[placeY+floor(roomHeight/2)][placeX-1] = 0;
+			}
+			if (doorUp) {
+				map.tiles[placeY-1][placeX+floor(roomWidth/2)] = 0;
+			}
+			for (var row = placeY; row < placeY + roomHeight; ++row) {
+				for (var col = placeX; col < placeX + roomWidth; ++col) {
+					map.tiles[row][col] = 0;
+				}
+			}
+			doorLeft = true;
+			placeX += roomWidth + 1;
+		}
+		doorUp = true;
+		placeY += roomHeight + 1;
+	}
+
+	//
+	//
 
 	function draw() {
 
@@ -98,12 +161,12 @@ window.init = function(canvas) {
 		var bottomRightX = topLeftX + screenTilesWide;
 		var bottomRightY = topLeftY + screenTilesHigh;
 
-		if (bottomRightX > mapWidth) {
-			bottomRightX = mapWidth;
+		if (bottomRightX > map.width) {
+			bottomRightX = map.width;
 		}
 
-		if (bottomRightY > mapHeight) {
-			bottomRightY = mapHeight;
+		if (bottomRightY > map.height) {
+			bottomRightY = map.height;
 		}
 
 		ctx.clearRect(0, 0, canvasWidth, canvasHeight);
@@ -115,8 +178,8 @@ window.init = function(canvas) {
 				if (y === playerPos.y && x === playerPos.x) {
 					ctx.fillStyle = 'red';
 				} else {
-					var tileToDraw = map[y][x];
-					ctx.fillStyle = tileToDraw == 1 ? '#e0e0e0' : '#707070';	
+					var tileToDraw = map.tiles[y][x];
+					ctx.fillStyle = tileToDraw == 0 ? '#e0e0e0' : '#707070';	
 				}
 				ctx.fillRect(drawX, drawY, tileWidth, tileHeight);
 				drawX += tileWidth;
@@ -128,10 +191,10 @@ window.init = function(canvas) {
 
 	setInterval(function() {
 
-		if (keyState.left.isDown)	playerPos.x = Math.max(0, playerPos.x - 1);
-		if (keyState.right.isDown)	playerPos.x = Math.min(mapWidth - 1, playerPos.x + 1);
-		if (keyState.up.isDown)		playerPos.y = Math.max(0, playerPos.y - 1);
-		if (keyState.down.isDown)	playerPos.y = Math.min(mapHeight - 1, playerPos.y + 1);
+		if (keyState.left.isDown)	tryMove(map, playerPos, -1, 0);
+		if (keyState.right.isDown)	tryMove(map, playerPos, 1, 0);
+		if (keyState.up.isDown)		tryMove(map, playerPos, 0, -1);
+		if (keyState.down.isDown)	tryMove(map, playerPos, 0, 1);
 
 		resetKeys();
 
