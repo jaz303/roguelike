@@ -40,22 +40,22 @@ var doorLeft = false;
 var doorUp = false;
 
 // Go room-by-room in Y-axis until a room can't fit
-while (placeY + roomHeight &lt; mapHeight) {
+while (placeY + roomHeight &lt; map.height) {
   placeX = 1; // Reset left side of room for this row
   doorLeft = false; // No left door for first room in row
   // Go room-by-room in X-axis until a room can't fit
-  while (placeX + roomWidth &lt; mapWidth) {
+  while (placeX + roomWidth &lt; map.width) {
     // Place "doors" by deleting tiles
     if (doorLeft) {
-      map[placeY+floor(roomHeight/2)][placeX-1] = 0;
+      map.tiles[placeY+floor(roomHeight/2)][placeX-1] = 0;
     }
     if (doorUp) {
-      map[placeY-1][placeX+floor(roomWidth/2)] = 0;
+      map.tiles[placeY-1][placeX+floor(roomWidth/2)] = 0;
     }
     // Fill in the "room" with empty space
     for (var row = placeY; row &lt; placeY + roomHeight; ++row) {
       for (var col = placeX; col &lt; placeX + roomWidth; ++col) {
-        map[row][col] = 0;
+        map.tiles[row][col] = 0;
       }
     }
     doorLeft = true; // Next room in row has a door to the left
