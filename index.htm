@@ -8,7 +8,7 @@
     <link rel='stylesheet' href='styles.css'></link>
     <script src='bundle.js'></script>
     <meta name='project' content='Roguelike'>
-    <meta name='description' content='Basic map generation &amp; player/world collision'>
+    <meta name='description' content='Health, fire and damage'>
   </head>
   <body onload='init(document.getElementById("canvas"));'>
     <div class='sidebar'>
@@ -21,95 +21,83 @@
       </div>
       <div class='narrative'>
 
-  <h1>Episode 2: rooms &amp; wall collisions</h1>
+<h1>Episode 3: Health, fire and damage</h1>
 
-  <p>
-    Tonight I've added a regular, connected grid of rooms to the world. This was pretty straightforward to generate:
-  </p>
+<p>
+  Just a quick session tonight because I need to catch an early train in the morning. I thought it would be a good idea to add a little bit of behaviour to the world so I've started with something very primitive - fire tiles that cause damage when stood on.
+</p>
 
-<pre><code>// Top left corner for placing rooms
-var placeX = 1;
-var placeY = 1;
+<p>
+  The first thing task was to modify the map generator to place random fire tiles (I'm using tile ID 2 to denote this):
+</p>
 
-// Size of rooms
-var roomWidth = 9;
-var roomHeight = 7;
-
-// Should we place doors leading left/up when we place the next room?
-var doorLeft = false;
-var doorUp = false;
-
-// Go room-by-room in Y-axis until a room can't fit
-while (placeY + roomHeight &lt; map.height) {
-  placeX = 1; // Reset left side of room for this row
-  doorLeft = false; // No left door for first room in row
-  // Go room-by-room in X-axis until a room can't fit
-  while (placeX + roomWidth &lt; map.width) {
-    // Place "doors" by deleting tiles
-    if (doorLeft) {
-      map.tiles[placeY+floor(roomHeight/2)][placeX-1] = 0;
-    }
-    if (doorUp) {
-      map.tiles[placeY-1][placeX+floor(roomWidth/2)] = 0;
-    }
-    // Fill in the "room" with empty space
-    for (var row = placeY; row &lt; placeY + roomHeight; ++row) {
-      for (var col = placeX; col &lt; placeX + roomWidth; ++col) {
-        map.tiles[row][col] = 0;
-      }
-    }
-    doorLeft = true; // Next room in row has a door to the left
-    // Move the placer over to the next room, leaving one extra cell
-    // for a passageway
-    placeX += roomWidth + 1;
-  }
-  doorUp = true; // End of row; every successive row should have door leading up
-  placeY += roomHeight + 1; // advance placer down in Y axis
-}</code></pre>
-
-  <p>
-    To implement wall collision I first introduced a helper function to check if a particular tile was blocked:
-  </p>
-
-<pre><code>function isTileBlocked(map, x, y) {
-  return map.tiles[y][x] !== 0;
-}</code></pre>
-
-  <p>
-    And then added a <code>tryMove()</code> function that takes a position object and a delta and only commits the move if the target tile is not blocked:
-  </p>
-
-<pre><code>function tryMove(map, currentPosition, dx, dy) {
-  var newX = currentPosition.x + dx;
-  var newY = currentPosition.y + dy;
-  if (newX &lt; 0 || newX &gt;= map.width || newY &lt; 0 || newY &gt;= map.height) {
-    return false;
-  } else if (!isTileBlocked(map, newX, newY)) {
-    currentPosition.x = newX;
-    currentPosition.y = newY;
-    return true;
-  } else {
-    return false;
+<pre><code>for (var row = placeY; row &lt; placeY + roomHeight; ++row) {
+  for (var col = placeX; col &lt; placeX + roomWidth; ++col) {
+    var tile = Math.random() &lt; (1 / 30) ? 2 : 0;
+    map.tiles[row][col] = tile;
   }
 }</code></pre>
 
-  <p>
-    This is deficient in cases where the absolute value of either <code>dx</code> or <code>dy</code> is greater than 1 (it would allow movement through walls) but it'll do for now.
-  </p>
+<p>
+  Now that the fire is part of the map data it would be a good idea to draw it so the player knows which tiles to avoid. For now we'll just special-case this in the draw loop; in future the tile drawing code should be generalised and data driven but let's table that until we have a few more tile types and a better understanding of what's required.
+</p>
 
-  <p>
-    The last step was to update the movement handler to use <code>tryMove()</code>:
-  </p>
+<h4>Tile draw code</h4>
+<pre><code>var tileToDraw = map.tiles[y][x];
+if (tileToDraw === 0) {
+  tileColor = '#e0e0e0';
+} else if (tileToDraw === 1) {
+  tileColor = '#707070';
+} else if (tileToDraw === 2) {
+  tileColor = 'red';
+}</code></pre>
 
-<pre><code>if (keyState.left.isDown)   tryMove(map, playerPos, -1, 0);
-if (keyState.right.isDown)  tryMove(map, playerPos, 1, 0);
-if (keyState.up.isDown)     tryMove(map, playerPos, 0, -1);
-if (keyState.down.isDown)   tryMove(map, playerPos, 0, 1);</code></pre>
+<p>
+  Introducing the notion of player health and drawing it was trivial:
+</p>
 
-  <p>
-    A good second night of hacking! In the next session I'll start adding some basic stats to the player (health, magic etc.) and maybe add some objects to the game world that can be collected/dropped.
-  </p>
+<pre><code>var playerPos = { x: 5, y: 4 };
+var playerHealth = 100;</code></pre>
 
+<pre><code>ctx.fillStyle = 'red';
+var healthBarY = canvas.height - 13;
+var healthBarX = 10;
+ctx.fillRect(healthBarX, healthBarY, playerHealth / 2, 3);</code></pre>
+
+<p>
+  Finally, the fire needs to injure the player. All that's required here is to check the player's current tile, and if it's fire, do damage. We need to do this on every game tick, so we'll place this code inside the <code>setInterval</code> callback.
+</p>
+
+<pre><code>if (map.tiles[playerPos.y][playerPos.x] === 2) {
+  playerHealth -= 1;
+  if (playerHealth &lt;= 0) {
+    // TODO: kill, restart?
+    playerHealth = 0;
+  }
+}</code></pre>
+
+<p>
+  Obviously this in superficial; in reality we'd need to take some action when the player's health hits zero, and we might also want to trigger some special behaviour (set the character on fire perhaps?) but this gets the idea down for now.
+</p>
+
+<h3>Other misc. changes</h3>
+
+<ol>
+  <li>
+    <code>isTileBlocked()</code> updated to only regard <code>1</code> as a blocked value, thereby permitting the player to walk into fire.
+  </li>
+  <li>
+    Player rendering was made explicit rather than using a special case in the tile drawing loop (lines 197-212 of <code>init.js</code>).
+  </li>
+</ol>
+  
+<p>
+  Next up, I think will be items and collecting/dropping.
+</p>
+
+<p>
+  Thanks for reading!
+</p>
 
       </div>
     </div>

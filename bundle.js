@@ -7,10 +7,10 @@ window.init = function(canvas) {
 	var canvasHeight 		= canvas.height;
 	var ctx 				= canvas.getContext('2d');
 
-	var tileWidth			= 16;
-	var tileHeight			= 16;
-	var screenTilesWide 	= canvasWidth / tileWidth;
-	var screenTilesHigh		= canvasHeight / tileHeight;
+	var tileSize			= 16;
+	var tileSize			= 16;
+	var screenTilesWide 	= canvasWidth / tileSize;
+	var screenTilesHigh		= canvasHeight / tileSize;
 
 	var map = {
 		width 	: 100,
@@ -19,6 +19,7 @@ window.init = function(canvas) {
 	};
 
 	var playerPos 			= { x: 5, y: 4 };
+	var playerHealth		= 100;
 
 	//
 	// Functions
@@ -38,7 +39,7 @@ window.init = function(canvas) {
 	}
 
 	function isTileBlocked(map, x, y) {
-		return map.tiles[y][x] !== 0;
+		return map.tiles[y][x] === 1;
 	}
 	
 	//
@@ -124,7 +125,8 @@ window.init = function(canvas) {
 			}
 			for (var row = placeY; row < placeY + roomHeight; ++row) {
 				for (var col = placeX; col < placeX + roomWidth; ++col) {
-					map.tiles[row][col] = 0;
+					var tile = Math.random() < (1 / 30) ? 2 : 0;
+					map.tiles[row][col] = tile;
 				}
 			}
 			doorLeft = true;
@@ -145,16 +147,18 @@ window.init = function(canvas) {
 		var drawStartX = 0;
 		var drawStartY = 0;
 
-		var topLeftX = cameraX - (Math.floor(screenTilesWide * 0.5));
-		var topLeftY = cameraY - (Math.floor(screenTilesHigh * 0.5));
+		var screenTopLeftX = cameraX - (Math.floor(screenTilesWide * 0.5));
+		var screenTopLeftY = cameraY - (Math.floor(screenTilesHigh * 0.5));
 
+		var topLeftX = screenTopLeftX;
 		if (topLeftX < 0) {
-			drawStartX = -topLeftX * tileWidth;
+			drawStartX = -topLeftX * tileSize;
 			topLeftX = 0;
 		}
 
+		var topLeftY = screenTopLeftY;
 		if (topLeftY < 0) {
-			drawStartY = -topLeftY * tileHeight;
+			drawStartY = -topLeftY * tileSize;
 			topLeftY = 0;
 		}
 
@@ -175,17 +179,46 @@ window.init = function(canvas) {
 		for (var y = topLeftY; y < bottomRightY; ++y) {
 			var drawX = drawStartX;
 			for (var x = topLeftX; x < bottomRightX; ++x) {
-				if (y === playerPos.y && x === playerPos.x) {
-					ctx.fillStyle = 'red';
-				} else {
-					var tileToDraw = map.tiles[y][x];
-					ctx.fillStyle = tileToDraw == 0 ? '#e0e0e0' : '#707070';	
+				var tileColor;
+				var tileToDraw = map.tiles[y][x];
+				if (tileToDraw === 0) {
+					tileColor = '#e0e0e0';
+				} else if (tileToDraw === 1) {
+					tileColor = '#707070';
+				} else if (tileToDraw === 2) {
+					tileColor = 'red';
 				}
-				ctx.fillRect(drawX, drawY, tileWidth, tileHeight);
-				drawX += tileWidth;
+				ctx.fillStyle = tileColor;
+				ctx.fillRect(drawX, drawY, tileSize, tileSize);
+				drawX += tileSize;
 			}
-			drawY += tileHeight;
+			drawY += tileSize;
 		}
+
+		//
+		// Draw player
+
+		var pox = playerPos.x - screenTopLeftX;
+		var poy = playerPos.y - screenTopLeftY;
+
+		ctx.fillStyle = 'black';
+		ctx.beginPath();
+		ctx.arc(
+			pox * tileSize + (tileSize * 0.5),
+			poy * tileSize + (tileSize * 0.5),
+			tileSize * 0.5 - 1,
+			Math.PI * 2,
+			false
+		);
+		ctx.fill();
+
+		//
+		// Draw stats
+
+		ctx.fillStyle = 'red';
+		var healthBarY = canvas.height - 13;
+		var healthBarX = 10;
+		ctx.fillRect(healthBarX, healthBarY, playerHealth / 2, 3);
 
 	}
 
@@ -195,6 +228,14 @@ window.init = function(canvas) {
 		if (keyState.right.isDown)	tryMove(map, playerPos, 1, 0);
 		if (keyState.up.isDown)		tryMove(map, playerPos, 0, -1);
 		if (keyState.down.isDown)	tryMove(map, playerPos, 0, 1);
+
+		if (map.tiles[playerPos.y][playerPos.x] === 2) {
+			playerHealth -= 1;
+			if (playerHealth <= 0) {
+				// TODO: kill, restart?
+				playerHealth = 0;
+			}
+		}
 
 		resetKeys();
 
