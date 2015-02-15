@@ -8,7 +8,7 @@
     <link rel='stylesheet' href='styles.css'></link>
     <script src='bundle.js'></script>
     <meta name='project' content='Roguelike'>
-    <meta name='description' content='Health, fire and damage'>
+    <meta name='description' content='Adding Items'>
   </head>
   <body onload='init(document.getElementById("canvas"));'>
     <div class='sidebar'>
@@ -21,83 +21,102 @@
       </div>
       <div class='narrative'>
 
-<h1>Episode 3: Health, fire and damage</h1>
+<h1>Episode 4: Adding Items</h1>
 
-<p>
-  Just a quick session tonight because I need to catch an early train in the morning. I thought it would be a good idea to add a little bit of behaviour to the world so I've started with something very primitive - fire tiles that cause damage when stood on.
-</p>
+<pre><code>var entities = [];
 
-<p>
-  The first thing task was to modify the map generator to place random fire tiles (I'm using tile ID 2 to denote this):
-</p>
+var possibleObjects = [
+  'green',
+  'blue',
+  'purple',
+  'red',
+  'yellow',
+  'orange',
+  'white'
+];
 
-<pre><code>for (var row = placeY; row &lt; placeY + roomHeight; ++row) {
-  for (var col = placeX; col &lt; placeX + roomWidth; ++col) {
-    var tile = Math.random() &lt; (1 / 30) ? 2 : 0;
-    map.tiles[row][col] = tile;
+for (var i = 0; i &lt; 20; ++i) {
+  do {
+    if (i &lt; 3) {
+      itemX = 5;
+      itemY = 5;
+    } else {
+      itemX = floor(random() * map.width);
+      itemY = floor(random() * map.height); 
+    }
+  } while (!canTileHoldItems(map, itemX, itemY));
+  var item = {
+    color: possibleObjects[floor(random() * possibleObjects.length)],
+    position: {
+      x: itemX,
+      y: itemY
+    }
+  };
+  entities.push(item);
+}</code></pre>
+
+<pre><code>function canTileHoldItems(map, x, y) {
+  return map.tiles[y][x] === 0;
+}</code></ore>
+
+<pre><code>function findMoveableItemsAtPosition(map, x, y) {
+  var out = [];
+  for (var i = 0; i &lt; entities.length; ++i) {
+    var e = entities[i];
+    if (e.position &amp;&amp; e.position.x === x &amp;&amp; e.position.y === y) {
+      out.push(e);
+    }
+  }
+  return out;
+}</code></pre>
+
+<pre><code>var itemsAtPlayer = findMoveableItemsAtPosition(map, playerPos.x, playerPos.y);
+if (itemsAtPlayer.length) {
+  var panelWidth =
+    5 +
+    (itemsAtPlayer.length * tileSize) +
+    ((itemsAtPlayer.length - 1) * 3) +
+    5;
+  var panelHeight = 5 + tileSize + 5;
+  var panelLeft = canvasWidth - 5 - panelWidth;
+  var panelTop = canvasHeight - 5 - panelHeight;
+  var drawLeft = panelLeft + 5 + halfTileSize;
+  var drawTop = panelTop + 5 + halfTileSize;
+  ctx.fillStyle = 'white';
+  ctx.fillRect(panelLeft, panelTop, panelWidth, panelHeight);
+  for (var ix = 0; ix &lt; itemsAtPlayer.length; ++ix) {
+    fillCircle(drawLeft, drawTop, tileSize * 0.5 - 3, itemsAtPlayer[ix].color);
+    drawLeft += tileSize + 3;
+  }
+  ctx.strokeStyle = 'red';
+  ctx.lineWidth = 1;
+  if (itemSelectIndex >= itemsAtPlayer.length) {
+    itemSelectIndex = 0;
+  }
+  ctx.strokeRect(
+    panelLeft + 4 + (itemSelectIndex * (tileSize + 3)),
+    panelTop + 4,
+    tileSize + 2,
+    tileSize + 2
+  );
+}</code></pre>
+
+<pre><code>if (keyState.tab.wentDown) {
+  var items = findMoveableItemsAtPosition(map, playerPos.x, playerPos.y);
+  itemSelectIndex++;
+  if (itemSelectIndex &gt;= items.length) {
+    itemSelectIndex = 0;
+  }
+} else if (keyState.enter.wentDown) {
+  var items = findMoveableItemsAtPosition(map, playerPos.x, playerPos.y);
+  var item = items[itemSelectIndex];
+  if (item) {
+    item.position = null;
+    item.carriedByPlayer = true;
+    itemSelectIndex = Math.max(0, itemSelectIndex - 1);
   }
 }</code></pre>
 
-<p>
-  Now that the fire is part of the map data it would be a good idea to draw it so the player knows which tiles to avoid. For now we'll just special-case this in the draw loop; in future the tile drawing code should be generalised and data driven but let's table that until we have a few more tile types and a better understanding of what's required.
-</p>
-
-<h4>Tile draw code</h4>
-<pre><code>var tileToDraw = map.tiles[y][x];
-if (tileToDraw === 0) {
-  tileColor = '#e0e0e0';
-} else if (tileToDraw === 1) {
-  tileColor = '#707070';
-} else if (tileToDraw === 2) {
-  tileColor = 'red';
-}</code></pre>
-
-<p>
-  Introducing the notion of player health and drawing it was trivial:
-</p>
-
-<pre><code>var playerPos = { x: 5, y: 4 };
-var playerHealth = 100;</code></pre>
-
-<pre><code>ctx.fillStyle = 'red';
-var healthBarY = canvas.height - 13;
-var healthBarX = 10;
-ctx.fillRect(healthBarX, healthBarY, playerHealth / 2, 3);</code></pre>
-
-<p>
-  Finally, the fire needs to injure the player. All that's required here is to check the player's current tile, and if it's fire, do damage. We need to do this on every game tick, so we'll place this code inside the <code>setInterval</code> callback.
-</p>
-
-<pre><code>if (map.tiles[playerPos.y][playerPos.x] === 2) {
-  playerHealth -= 1;
-  if (playerHealth &lt;= 0) {
-    // TODO: kill, restart?
-    playerHealth = 0;
-  }
-}</code></pre>
-
-<p>
-  Obviously this in superficial; in reality we'd need to take some action when the player's health hits zero, and we might also want to trigger some special behaviour (set the character on fire perhaps?) but this gets the idea down for now.
-</p>
-
-<h3>Other misc. changes</h3>
-
-<ol>
-  <li>
-    <code>isTileBlocked()</code> updated to only regard <code>1</code> as a blocked value, thereby permitting the player to walk into fire.
-  </li>
-  <li>
-    Player rendering was made explicit rather than using a special case in the tile drawing loop (lines 197-212 of <code>init.js</code>).
-  </li>
-</ol>
-  
-<p>
-  Next up, I think will be items and collecting/dropping.
-</p>
-
-<p>
-  Thanks for reading!
-</p>
 
       </div>
     </div>

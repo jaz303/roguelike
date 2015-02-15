@@ -1,4 +1,5 @@
 var floor = Math.floor;
+var random = Math.random;
 
 window.init = function(canvas) {
 
@@ -8,6 +9,7 @@ window.init = function(canvas) {
 
 	var tileSize			= 16;
 	var tileSize			= 16;
+	var halfTileSize 		= 8;
 	var screenTilesWide 	= canvasWidth / tileSize;
 	var screenTilesHigh		= canvasHeight / tileSize;
 
@@ -19,6 +21,27 @@ window.init = function(canvas) {
 
 	var playerPos 			= { x: 5, y: 4 };
 	var playerHealth		= 100;
+
+	var itemSelectIndex		= 0;
+
+	//
+	// Drawing
+
+	function fillCircle(cx, cy, radius, color) {
+		ctx.fillStyle = color;
+		ctx.beginPath();
+		ctx.arc(cx, cy, radius, 0, Math.PI * 2, false);
+		ctx.fill();
+	}
+
+	function fillCircleAtScreenTile(tx, ty, tileSizeDelta, color) {
+		fillCircle(
+			tx * tileSize + halfTileSize, 
+			ty * tileSize + halfTileSize,
+			halfTileSize + tileSizeDelta,
+			color
+		);
+	}
 
 	//
 	// Functions
@@ -40,6 +63,21 @@ window.init = function(canvas) {
 	function isTileBlocked(map, x, y) {
 		return map.tiles[y][x] === 1;
 	}
+
+	function canTileHoldItems(map, x, y) {
+		return map.tiles[y][x] === 0;
+	}
+
+	function findMoveableItemsAtPosition(map, x, y) {
+		var out = [];
+		for (var i = 0; i < entities.length; ++i) {
+			var e = entities[i];
+			if (e.position && e.position.x === x && e.position.y === y) {
+				out.push(e);
+			}
+		}
+		return out;
+	}
 	
 	//
 	// Keyboard handling
@@ -51,6 +89,7 @@ window.init = function(canvas) {
 		keyMap[keyCode] = name;
 		keyState[name] = {
 			isDown: false,
+			wentDown: false,
 			halfTxCount: 0
 		};
 	}
@@ -58,6 +97,7 @@ window.init = function(canvas) {
 	function resetKeys() {
 		for (var k in keyState) {
 			keyState[k].halfTxCount = 0;
+			keyState[k].wentDown = false;
 		}
 	}
 
@@ -65,6 +105,8 @@ window.init = function(canvas) {
 	makeKey('right', 	39);
 	makeKey('up',		38);
 	makeKey('down',		40);
+	makeKey('tab',		9);
+	makeKey('enter',	13);
 
 	canvas.addEventListener('keydown', function(evt) {
 		var name = keyMap[evt.which];
@@ -74,6 +116,7 @@ window.init = function(canvas) {
 				// this is a repeat; do nothing
 			} else {
 				state.isDown = true;
+				state.wentDown = true;
 				state.halfTxCount++;
 			}
 		}
@@ -136,33 +179,72 @@ window.init = function(canvas) {
 	}
 
 	//
+	// Game objects
+
+	var entities = [];
+
+	var possibleObjects = [
+		'green',
+		'blue',
+		'purple',
+		'red',
+		'yellow',
+		'orange',
+		'white'
+	];
+
+	for (var i = 0; i < 20; ++i) {
+		do {
+			if (i < 3) {
+				itemX = 5;
+				itemY = 5;
+			} else {
+				itemX = floor(random() * map.width);
+				itemY = floor(random() * map.height);	
+			}
+		} while (!canTileHoldItems(map, itemX, itemY));
+		var item = {
+			color: possibleObjects[floor(random() * possibleObjects.length)],
+			position: {
+				x: itemX,
+				y: itemY
+			}
+		};
+		entities.push(item);
+	}
+
+	//
 	//
 
 	function draw() {
 
-		var cameraX = playerPos.x;
-		var cameraY = playerPos.y;
+		//
+		// camera bounds
+
+		var cameraCenterX = playerPos.x;
+		var cameraCenterY = playerPos.y;
+		var cameraTopLeftX = cameraCenterX - (Math.floor(screenTilesWide * 0.5));
+		var cameraTopLeftY = cameraCenterY - (Math.floor(screenTilesHigh * 0.5));
+		var cameraBottomRightX = cameraTopLeftX + screenTilesWide;
+		var cameraBottomRightY = cameraTopLeftY + screenTilesHigh;
 
 		var drawStartX = 0;
 		var drawStartY = 0;
 
-		var screenTopLeftX = cameraX - (Math.floor(screenTilesWide * 0.5));
-		var screenTopLeftY = cameraY - (Math.floor(screenTilesHigh * 0.5));
-
-		var topLeftX = screenTopLeftX;
+		var topLeftX = cameraTopLeftX;
 		if (topLeftX < 0) {
 			drawStartX = -topLeftX * tileSize;
 			topLeftX = 0;
 		}
 
-		var topLeftY = screenTopLeftY;
+		var topLeftY = cameraTopLeftY;
 		if (topLeftY < 0) {
 			drawStartY = -topLeftY * tileSize;
 			topLeftY = 0;
 		}
 
-		var bottomRightX = topLeftX + screenTilesWide;
-		var bottomRightY = topLeftY + screenTilesHigh;
+		var bottomRightX = cameraTopLeftX + screenTilesWide;
+		var bottomRightY = cameraTopLeftY + screenTilesHigh;
 
 		if (bottomRightX > map.width) {
 			bottomRightX = map.width;
@@ -195,21 +277,63 @@ window.init = function(canvas) {
 		}
 
 		//
+		// Draw entities
+
+		for (var ix = 0; ix < entities.length; ++ix) {
+			var entity = entities[ix];
+			if (entity.position) {
+				if (entity.position.x >= cameraTopLeftX
+					&& entity.position.x < cameraBottomRightX
+					&& entity.position.y >= cameraTopLeftY
+					&& entity.position.y < cameraBottomRightY) {
+					var ex = entity.position.x - cameraTopLeftX;
+					var ey = entity.position.y - cameraTopLeftY;
+					fillCircleAtScreenTile(ex, ey, -3, entity.color);
+				}
+			}
+		}
+
+		//
 		// Draw player
 
-		var pox = playerPos.x - screenTopLeftX;
-		var poy = playerPos.y - screenTopLeftY;
+		var pox = playerPos.x - cameraTopLeftX;
+		var poy = playerPos.y - cameraTopLeftY;
 
-		ctx.fillStyle = 'black';
-		ctx.beginPath();
-		ctx.arc(
-			pox * tileSize + (tileSize * 0.5),
-			poy * tileSize + (tileSize * 0.5),
-			tileSize * 0.5 - 1,
-			Math.PI * 2,
-			false
-		);
-		ctx.fill();
+		fillCircleAtScreenTile(pox, poy, -1, 'black');
+
+		//
+		// Draw items under player
+
+		var itemsAtPlayer = findMoveableItemsAtPosition(map, playerPos.x, playerPos.y);
+		if (itemsAtPlayer.length) {
+			var panelWidth =
+				5 +
+				(itemsAtPlayer.length * tileSize) +
+				((itemsAtPlayer.length - 1) * 3) +
+				5;
+			var panelHeight = 5 + tileSize + 5;
+			var panelLeft = canvasWidth - 5 - panelWidth;
+			var panelTop = canvasHeight - 5 - panelHeight;
+			var drawLeft = panelLeft + 5 + halfTileSize;
+			var drawTop = panelTop + 5 + halfTileSize;
+			ctx.fillStyle = 'white';
+			ctx.fillRect(panelLeft, panelTop, panelWidth, panelHeight);
+			for (var ix = 0; ix < itemsAtPlayer.length; ++ix) {
+				fillCircle(drawLeft, drawTop, tileSize * 0.5 - 3, itemsAtPlayer[ix].color);
+				drawLeft += tileSize + 3;
+			}
+			ctx.strokeStyle = 'red';
+			ctx.lineWidth = 1;
+			if (itemSelectIndex >= itemsAtPlayer.length) {
+				itemSelectIndex = 0;
+			}
+			ctx.strokeRect(
+				panelLeft + 4 + (itemSelectIndex * (tileSize + 3)),
+				panelTop + 4,
+				tileSize + 2,
+				tileSize + 2
+			);
+		}
 
 		//
 		// Draw stats
@@ -227,6 +351,22 @@ window.init = function(canvas) {
 		if (keyState.right.isDown)	tryMove(map, playerPos, 1, 0);
 		if (keyState.up.isDown)		tryMove(map, playerPos, 0, -1);
 		if (keyState.down.isDown)	tryMove(map, playerPos, 0, 1);
+
+		if (keyState.tab.wentDown) {
+			var items = findMoveableItemsAtPosition(map, playerPos.x, playerPos.y);
+			itemSelectIndex++;
+			if (itemSelectIndex >= items.length) {
+				itemSelectIndex = 0;
+			}
+		} else if (keyState.enter.wentDown) {
+			var items = findMoveableItemsAtPosition(map, playerPos.x, playerPos.y);
+			var item = items[itemSelectIndex];
+			if (item) {
+				item.position = null;
+				item.carriedByPlayer = true;
+				itemSelectIndex = Math.max(0, itemSelectIndex - 1);
+			}
+		}
 
 		if (map.tiles[playerPos.y][playerPos.x] === 2) {
 			playerHealth -= 1;
