@@ -23,6 +23,43 @@
 
 <h1>Episode 4: Adding Items</h1>
 
+<p>
+  So the plan for this episode is to randomly populate the world with a
+  bunch of conveyable items and allow the player to collect them. We'll
+  begin by simply representing objects by the colour they are drawn with,
+  so the algorithm to generate the items is straightforward:
+</p>
+
+<ul>
+  <li>for each item to be generated:
+    <ul>
+      <li>repeat:
+        <ul>
+          <li>pick a random tile to place the item</li>
+          <li>exit if item can be placed on chosen tile</li>
+        </ul>
+      </li>
+      <li>pick a random colour for the new item</li>
+      <li>place item of the chosen colour on the chosen tile</li>
+    </ul>
+  </li>
+</ul>
+
+<p>
+  At this stage I've chosen to represent the objects in the world as
+  a single array. The obvious shortcoming to this approach is that an
+  array is not a spatially-aware datastructure, i.e. to find the objects
+  at a given location we need to walk the entire list, comparing the
+  query location to the location of each object. When we only have
+  a handful of objects this won't present a performance problem but
+  this appraoch won't serve us so well when our world contains a larger
+  number of entities. We'll revisit this in the future.
+</p>
+
+<p>
+  Here's my implementation of the above algorithm:
+</p>
+
 <pre><code>var entities = [];
 
 var possibleObjects = [
@@ -55,9 +92,81 @@ for (var i = 0; i &lt; 20; ++i) {
   entities.push(item);
 }</code></pre>
 
+<p>
+  The comparison against 3 is a hack to force the first three items
+  to be placed at the same map location; the probability of items
+  landing on the same square is small so this code was necessary to
+  give me a way to test the item-cycling code (see below).
+</p>
+
+<p>
+  The helper function <code>canTileHoldItems()</code> is simply:
+</p>
+
 <pre><code>function canTileHoldItems(map, x, y) {
   return map.tiles[y][x] === 0;
-}</code></ore>
+}</code></pre>
+
+<p>
+  Sweet. So now we have some random objects scattered about our map.
+  Let's draw 'em!
+</p>
+
+<p>
+  All it takes is a straight iteration over the entity list and a couple
+  of checks to confirm that a) it has a position (i.e. it's present
+  on the map) and b) that it's position is within the bounds of the
+  camera. If an entity passes both of these checks we draw a coloured
+  circle on the correct tile using <code>fillCircleAtScreenTile()</code>.
+</p>
+
+<p>
+  You may be asking why it is necessary to check that an item <i>has</i>
+  a position before comparing its x/y components. We gave all of the entities
+  a position when generating them so why do we need to check, right? Well,
+  what happens when an item is collected by a player or NPC? We could constantly update its position so that it mirrors that of its bearer, but 
+  that's pretty wasteful. It would be much simpler to somehow mark that
+  the object was currently being carried and prevent it from being drawn on
+  the map. My plan is to do this by using the presence or absence of the
+  position property to indicate whether or not an item is on the map. So
+  when an item is collected we remove its position property, and when it
+  is subsequently dropped we add a new position property pointing at the
+  drop location.
+</p>
+
+<pre><code>for (var ix = 0; ix &lt; entities.length; ++ix) {
+  var entity = entities[ix];
+  if (entity.position) {
+    if (entity.position.x >= cameraTopLeftX
+      &amp;&amp; entity.position.x &lt; cameraBottomRightX
+      &amp;&amp; entity.position.y &gt;= cameraTopLeftY
+      &amp;&amp; entity.position.y &lt; cameraBottomRightY) {
+      var ex = entity.position.x - cameraTopLeftX;
+      var ey = entity.position.y - cameraTopLeftY;
+      fillCircleAtScreenTile(ex, ey, -3, entity.color);
+    }
+  }
+}</code></pre>
+
+<p>
+  Next thing to do is offer the player the ability to collect any item
+  at their current position. There's a slight complication, however, that
+  I alluded to earlier. What if there are multiple items at the current
+  tile? We could simply collect the items in the order they appear in
+  the entity list - although that would be lame. Better to give the
+  player a choice about which item they pick up with a little graphical
+  menu which can tab through the available items:
+</p>
+
+<p>
+  <img src='images/pickup.gif'>
+</p>
+
+<p>
+  First thing we're going to need is a way of find all of the objects
+  at a specific location. This is trivial - just walk the entity
+  list and return the items with a matching position:
+</p>
 
 <pre><code>function findMoveableItemsAtPosition(map, x, y) {
   var out = [];
@@ -69,6 +178,14 @@ for (var i = 0; i &lt; 20; ++i) {
   }
   return out;
 }</code></pre>
+
+<p>
+  Drawing the list of available objects is a little more involved but most of the complexity is due to drawing calculations, not the actual game logic itself. I'm using the variable <code>itemSelectedIndex</code> to
+  track the index of the item currently selected by the player and resetting
+  it in the event that its current value exceeds the number of items on the
+  tile. This would happen, for example, if the player had just moved from
+  a tile with a greater number of items.
+</p>
 
 <pre><code>var itemsAtPlayer = findMoveableItemsAtPosition(map, playerPos.x, playerPos.y);
 if (itemsAtPlayer.length) {
@@ -101,13 +218,35 @@ if (itemsAtPlayer.length) {
   );
 }</code></pre>
 
+<p>
+  Last thing to do is hook up the controls to allow the user to cycle
+  through the available items at a given location, and to pick up the
+  the selected item.
+</p>
+
+<p>
+  Item cycling is straightforward: just increment
+  <code>itemSelectIndex</code> and wrap if we exceed the maximum
+  allowable index.
+</p>
+
 <pre><code>if (keyState.tab.wentDown) {
   var items = findMoveableItemsAtPosition(map, playerPos.x, playerPos.y);
   itemSelectIndex++;
   if (itemSelectIndex &gt;= items.length) {
     itemSelectIndex = 0;
   }
-} else if (keyState.enter.wentDown) {
+}</code></pre>
+
+<p>
+  To handle item pick-up, we first check for a selected item.
+  If there is one, we delete its position - this will prevent
+  it from being drawn on the map - and add a flag to indicate
+  that the player is now carrying it (we'll use this in the future
+  to draw the player's inventory).
+</p>
+
+<pre><code>{ else if (keyState.enter.wentDown) {
   var items = findMoveableItemsAtPosition(map, playerPos.x, playerPos.y);
   var item = items[itemSelectIndex];
   if (item) {
